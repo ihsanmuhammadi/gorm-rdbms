@@ -13,11 +13,11 @@ import (
 )
 
 // Make GET request from News API
-func GetNewsApi(c *fiber.Ctx) (string, error) {
+func GetNewsApi(c *fiber.Ctx) (string, string, string, error) {
 	// Get the API Key from the environment
 	apiKey := os.Getenv("NEWS_API_KEY")
 	if apiKey == "" {
-		return "", c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+		return "", "", "", c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "API key not set",
 		})
 	}
@@ -29,7 +29,7 @@ func GetNewsApi(c *fiber.Ctx) (string, error) {
 	agent := fiber.Get(url)
 	_, body, errs := agent.Bytes()
 	if len(errs) > 0 {
-		return "", c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+		return "", "", "", c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"errs": errs,
 		})
 	}
@@ -38,22 +38,28 @@ func GetNewsApi(c *fiber.Ctx) (string, error) {
 	var news request.GetNews
 	err := json.Unmarshal(body, &news)
 	if err != nil {
-		return "", c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+		return "", "", "", c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"err": err,
 		})
 	}
 
 	// Check if there is a data there
 	if len(news.Articles) == 0 {
-		return "", c.Status(fiber.StatusNoContent).JSON(fiber.Map{
+		return "", "", "", c.Status(fiber.StatusNoContent).JSON(fiber.Map{
 			"message": "no articles found",
 		})
 	}
 
-	// Take the first data
+	// Take the 'name' from Source data
 	sourceData := news.Articles[0].Source.Name
 
-	return sourceData, nil
+	// Take the 'url' data
+	urlData := news.Articles[0].Url
+
+	// Take the 'author' data
+	authorData := news.Articles[0].Author
+
+	return sourceData, urlData, authorData, nil
 }
 
 func GetAllPosts(c *fiber.Ctx) error {
@@ -97,7 +103,7 @@ func GetPostById(c *fiber.Ctx) error {
 
 func CreatePost(c *fiber.Ctx) error {
 	// Take the data from the API
-	tagData, _ := GetNewsApi(c)
+	sourceData, urlData, authorData, _ := GetNewsApi(c)
 
 	// Make a new request
 	p := new(request.CreatePost)
@@ -122,6 +128,7 @@ func CreatePost(c *fiber.Ctx) error {
 	newPost := models.Post{
 		Title: p.Title,
 		Content: p.Content,
+		Comment: authorData,
 		Author: models.Author{
 			Name: p.Author.Name,
 			Email: p.Author.Email,
@@ -143,7 +150,10 @@ func CreatePost(c *fiber.Ctx) error {
 
 	// Add a tag from request News API
 	newPost.Tags = append(newPost.Tags, models.Tag{
-		Name: tagData,
+		Name: sourceData,
+	})
+	newPost.Tags = append(newPost.Tags, models.Tag{
+		Name: urlData,
 	})
 
 	// Save to database
@@ -196,6 +206,7 @@ func UpdatePost(c *fiber.Ctx) error {
 	// Update data
 	post.Title = p.Title
 	post.Content = p.Content
+	post.Comment = p.Comment
 	post.Author = models.Author{
 		Name: p.Author.Name,
 		Email: p.Author.Email,

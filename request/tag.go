@@ -1,5 +1,5 @@
 package request
 
 type CreateTag struct {
-	Name	string	`json:"nameTag" validate:"required"`
+	Name	string	`json:"nameTag"`
 }
