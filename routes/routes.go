@@ -22,6 +22,6 @@ func Routes(app *fiber.App)  {
 	// Delete post
 	app.Delete("/post/:id", controller.DeletePost)
 
-	// Get something from API
-	// app.Get("/news", controller.GetNewsApi)
+	// Post News to DB
+	app.Post("/news", controller.CreateNews)
 }

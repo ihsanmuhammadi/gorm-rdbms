@@ -24,7 +24,7 @@ func Database()  {
 	fmt.Println("Connected to database")
 
 	// Migrate the schema
-	errMigrate := DB.AutoMigrate(models.Post{}, models.Author{}, models.Category{})
+	errMigrate := DB.AutoMigrate(models.Post{}, models.Author{}, models.Category{}, models.News{}, models.Articles{}, models.Author{})
 	if errMigrate != nil {
 		panic("failed to migrate")
 	}

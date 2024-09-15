@@ -12,6 +12,75 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+func CreateNews(c *fiber.Ctx) error  {
+	// Get the API Key from the environment
+	apiKey := os.Getenv("NEWS_API_KEY")
+	if apiKey == "" {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "API key not set",
+		})
+	}
+
+	// URL
+	topic := "tesla"
+	url := "https://newsapi.org/v2/top-headlines?" + "q=" + topic + "&apiKey=" + apiKey
+
+	// Get the data
+	agent := fiber.Get(url)
+	_, body, errs := agent.Bytes()
+	if len(errs) > 0 {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"errs": errs,
+		})
+	}
+
+	// Put data in the new struct
+	var news request.News
+	err := json.Unmarshal(body, &news)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"err": err,
+		})
+	}
+
+	// Create with association
+	newNews := models.News{
+		Topic: topic,
+		Status: news.Status,
+		TotalResults: news.TotalResults,
+		Articles: []models.Articles{},
+	}
+	for _, art := range news.Articles {
+		newNews.Articles = append(newNews.Articles, models.Articles{
+			Source:	models.Source{
+				Name: art.Source.Name,
+			},
+			Author: art.Author,
+			Title: art.Title,
+			Description: art.Description,
+			Url: art.Url,
+			UrlToImage: art.UrlToImage,
+			PublishedAt: art.PublishedAt,
+			Content: art.Content,
+		})
+	}
+
+	// Save to database
+	resultPost := database.DB.Create(&newNews)
+	if resultPost.Error != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"message": "failed to make post!",
+			"error": resultPost.Error.Error(),
+		})
+	}
+
+	// Return the response with the created news
+	return c.Status(200).JSON(fiber.Map{
+		"message": "success",
+		"data": newNews,
+	})
+}
+
 // Make GET request from News API
 func GetNewsApi(c *fiber.Ctx) (string, string, string, error) {
 	// Get the API Key from the environment
@@ -35,7 +104,7 @@ func GetNewsApi(c *fiber.Ctx) (string, string, string, error) {
 	}
 
 	// Put data in the new struct
-	var news request.GetNews
+	var news request.News
 	err := json.Unmarshal(body, &news)
 	if err != nil {
 		return "", "", "", c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
