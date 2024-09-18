@@ -2,10 +2,12 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
 	"gorm-rdbms/database"
 	"gorm-rdbms/models"
 	"gorm-rdbms/request"
 	"os"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
@@ -13,6 +15,9 @@ import (
 )
 
 func CreateNews(c *fiber.Ctx) error  {
+	// Start time
+	startTime := time.Now()
+
 	// Get the API Key from the environment
 	apiKey := os.Getenv("NEWS_API_KEY")
 	if apiKey == "" {
@@ -25,6 +30,9 @@ func CreateNews(c *fiber.Ctx) error  {
 	topic := "tesla"
 	url := "https://newsapi.org/v2/top-headlines?" + "q=" + topic + "&apiKey=" + apiKey
 
+	// Request duration
+	startRequest := time.Now()
+
 	// Get the data
 	agent := fiber.Get(url)
 	_, body, errs := agent.Bytes()
@@ -33,6 +41,13 @@ func CreateNews(c *fiber.Ctx) error  {
 			"errs": errs,
 		})
 	}
+
+	// Request duration
+	requestDuration := time.Since(startRequest).Milliseconds()
+	fmt.Printf("Total time taken for request to third party: %v ms\n", requestDuration)
+
+	// DB duration
+	startDB := time.Now()
 
 	// Put data in the new struct
 	var news request.News
@@ -65,14 +80,33 @@ func CreateNews(c *fiber.Ctx) error  {
 		})
 	}
 
+	// Save to database concurrently
+	go func(news models.News) {
+		resultPost := database.DB.Create(&newNews)
+		if resultPost.Error != nil {
+			c.Status(500).JSON(fiber.Map{
+				"message": "failed to make post!",
+				"error": resultPost.Error.Error(),
+			})
+		}
+	}(newNews)
+
 	// Save to database
-	resultPost := database.DB.Create(&newNews)
-	if resultPost.Error != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"message": "failed to make post!",
-			"error": resultPost.Error.Error(),
-		})
-	}
+	// resultPost := database.DB.Create(&newNews)
+	// if resultPost.Error != nil {
+	// 	c.Status(500).JSON(fiber.Map{
+	// 		"message": "failed to make post!",
+	// 		"error": resultPost.Error.Error(),
+	// 	})
+	// }
+
+	// Duration save to db
+	dbDuration := time.Since(startDB).Milliseconds()
+	fmt.Printf("Total time taken for database save: %v ms\n", dbDuration)
+
+	// Total duration
+	totalDuration := time.Since(startTime).Milliseconds()
+	fmt.Printf("Total duration: %v ms\n", totalDuration)
 
 	// Return the response with the created news
 	return c.Status(200).JSON(fiber.Map{
